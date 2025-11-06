@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Typography Bars – Rotatable Edition</title>
+  <style>
+    :root {
+      --accent: #3aa3ff;
+      --dock-bg: rgba(22, 22, 26, 0.55);
+      --border: rgba(255, 255, 255, 0.18);
+      --text: #f1f5f9;
+      --muted: #a9bed6;
+      --shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+      --app-font: "Stack Sans Notch", system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: #111; color: var(--text); font-family: var(--app-font); }
+    input, button, select, textarea { font: inherit; }
+
+    html, body, #stage, .dock, .toggleDock, .rotHandle, .readout, .field, .btn, .opt, .title, label, .readout div, .field input, .field select, .field textarea { font-family: var(--app-font) !important; }
+
+    #stage { position: fixed; inset: 0; overflow: hidden; background: #111; }
+
+    .canvasWrap {
+      position: absolute;
+      left: -60vmax; top: -60vmax; right: -60vmax; bottom: -60vmax;
+      background: #fff; transform-origin: 50% 50%;
+      will-change: transform;
+    }
+
+    .stripe { 
+      width: 100%; 
+      transition: none; 
+      will-change: height;
+      contain: strict;
+    }
+    .animate .stripe { transition: height 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+    .stripe.white { background: #fff; }
+    .stripe.black { background: #000; }
+
+    @media (prefers-reduced-motion: reduce) { .stripe { transition: none; } }
+
+    .dock {
+      position: fixed; left: 1rem; bottom: 1rem; z-index: 20; display: flex; flex-direction: column; gap: 0.85rem;
+      padding: 1rem; border-radius: 1rem; border: 1px solid var(--border); background: var(--dock-bg);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: var(--shadow);
+      width: min(480px, calc(100vw - 2rem));
+      transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .dock.hidden { opacity: 0; transform: translateY(10px); pointer-events: none; }
+    .title { font-weight: 700; font-size: 1.05rem; letter-spacing: 0.25px; margin-bottom: 0.1rem; background: linear-gradient(135deg, #fff 0%, #a9bed6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-variation-settings: "wght" 700; }
+    .stack { display: flex; flex-direction: column; gap: 0.65rem; }
+    .field { display: flex; flex-direction: column; gap: 0.35rem; }
+    .field label { font-size: 0.78rem; font-weight: 500; color: var(--muted); letter-spacing: 0.3px; }
+    .field input[type="number"] {
+      padding: 0.6rem 0.7rem; border-radius: 0.8rem; border: 1px solid var(--border);
+      background: rgba(0,0,0,0.28); color: #fff; font-size: 1rem; transition: border-color 0.2s, background 0.2s;
+    }
+    .field input[type="number"]:focus { outline: none; border-color: var(--accent); background: rgba(0,0,0,0.4); }
+    .opts { display: flex; gap: 0.95rem; flex-wrap: wrap; margin-top: 0.1rem; }
+    .opt { display: flex; align-items: center; gap: 0.45rem; font-size: 0.9rem; color: #e5eefc; cursor: pointer; user-select: none; }
+    .opt input[type="checkbox"] { width: 1.1rem; height: 1.1rem; cursor: pointer; accent-color: var(--accent); }
+    .btns { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .btn { padding: 0.55rem 0.9rem; border-radius: 0.8rem; font-weight: 700; font-size: 0.9rem; cursor: pointer; border: 0; transition: transform 0.15s, box-shadow 0.15s, background 0.15s; user-select: none; }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn.primary { background: var(--accent); color: #001b2e; box-shadow: 0 2px 8px rgba(58,163,255,0.3); }
+    .btn.primary:hover { box-shadow: 0 4px 12px rgba(58,163,255,0.4); }
+    .btn.secondary { background: rgba(255,255,255,0.08); color: #dce7f5; border: 1px solid var(--border); }
+    .btn.secondary:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.25); }
+    .readout { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; font-size: 0.85rem; color: #b7d9ff; }
+    .readout div { background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.12); padding: 0.5rem 0.65rem; border-radius: 0.8rem; transition: background 0.2s; }
+    .readout div:hover { background: rgba(0,0,0,0.28); }
+
+    .toggleDock {
+      position: fixed; right: 0.9rem; top: 0.9rem; z-index: 25; background: rgba(0,0,0,0.5); color: #eaf2ff; border: 1px solid var(--border);
+      padding: 0.45rem 0.7rem; border-radius: 0.7rem; cursor: pointer; font-size: 0.85rem; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.25s, background 0.2s; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    }
+    .toggleDock.visible { opacity: 1; pointer-events: auto; }
+    .toggleDock:hover { background: rgba(0,0,0,0.7); }
+
+    .rotHandle {
+      position: fixed; right: 1rem; bottom: 7.25rem;
+      width: 24px; height: 24px; border-radius: 50%;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid var(--border); box-shadow: var(--shadow);
+      display: grid; place-items: center; z-index: 30; cursor: grab; user-select: none;
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    }
+    .rotHandle::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+    .rotHandle.dragging { cursor: grabbing; }
+
+    @media (max-width: 520px) { .dock { left: 0.75rem; right: 0.75rem; bottom: 0.75rem; width: auto; } .rotHandle { bottom: 6.75rem; } }
+
+    @media print { .dock, .toggleDock, .rotHandle { display: none; } body { background: #fff; } }
+
+    :root.use-stack, html.use-stack, body.use-stack { font-family: var(--app-font); }
+
+    #splash { position: fixed; inset: 0; display: none; place-items: center; z-index: 50; background: transparent; color: #eaf2ff; font-weight: 700; text-align: center; --splash-out-dur: 1500ms; }
+    #splash::before { content: ""; position: fixed; inset: 0; background: #000; opacity: 1; pointer-events: none; will-change: opacity; }
+    @keyframes splashBgOut { from{opacity:1} to{opacity:0} }
+    #splash.bg-out::before { animation: splashBgOut var(--splash-out-dur) cubic-bezier(.23,1,.32,1) forwards; }
+    #splash .card { padding: 1.1rem 1.35rem; border-radius: 1rem; background: rgba(0,0,0,0.45); border: 1px solid var(--border); box-shadow: var(--shadow); backdrop-filter: blur(8px); }
+    #splash .sub { margin-top: 0.25rem; font-weight: 500; font-size: .9rem; color: var(--muted); }
+    @media print { #splash { display:none !important; } }
+
+    #splash.bg-out { pointer-events: none; }
+    #splash.bg-out .card, #splash.bg-out .splash-msg { animation: splashUiOut var(--splash-out-dur) cubic-bezier(.23,1,.32,1) forwards; }
+    @keyframes splashUiOut { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(-4px) scale(1.02); } }
+
+    .app-hidden #stage, .app-hidden .dock, .app-hidden .toggleDock, .app-hidden .rotHandle { opacity: 0; pointer-events: none; }
+
+    .loader.fade-out { opacity: 0; transition: opacity .3s ease; }
+
+    .loader { width: 40px; height: 40px; --c:no-repeat linear-gradient(#fff 0 0); background: var(--c),var(--c),var(--c),var(--c); background-size: 21px 21px; animation: l5 1.5s infinite cubic-bezier(0.3,1,0,1); margin: 0 auto; }
+    @keyframes l5 { 0%{background-position:0 0,100% 0,100% 100%,0 100%} 33%{background-position:0 0,100% 0,100% 100%,0 100%; width:60px;height:60px} 66%{background-position:100% 0,100% 100%,0 100%,0 0;width:60px;height:60px} 100%{background-position:100% 0,100% 100%,0 100%,0 0} }
+
+    .splash-msg { margin-top: .6rem; font-weight: 700; font-size: 120pt; letter-spacing: .2px; line-height: 1.05; }
+    .fade-in { animation: fadeIn .28s ease forwards; }
+    @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+    .welcome-zoom { animation: welcomeIn 500ms cubic-bezier(.755,.05,.855,.06) forwards, welcomeOut 500ms cubic-bezier(.23,1,.32,1) 1000ms forwards; }
+    @keyframes welcomeIn { from { transform: scale(.90); opacity:0 } to { transform: scale(1); opacity:1 } }
+    @keyframes welcomeOut { from { transform: scale(1); opacity:1 } to { transform: scale(1.08); opacity:0 } }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+</head>
+<body class="app-hidden">
+  <div id="splash" role="status" aria-live="polite">
+    <div class="card">
+      <div class="loader" aria-hidden="true"></div>
+      <div class="sub splash-msg" id="splashMsg">Loading font…</div>
+    </div>
+  </div>
+
+  <div id="stage" aria-hidden="true">
+    <div class="canvasWrap" id="canvas" aria-label="Typography bars preview"></div>
+  </div>
+
+  <button class="toggleDock" id="toggle" title="Hide/Show controls (H)">Hide Controls ▲</button>
+  <div class="rotHandle" id="rotHandle" title="Drag anywhere to rotate"></div>
+
+  <div class="dock" id="dock" role="region" aria-label="Controls">
+    <div class="title">Typography Bars – Controls</div>
+
+    <div class="stack">
+      <div class="field">
+        <label for="screenCm">Screen height (cm)</label>
+        <input id="screenCm" type="number" step="0.01" min="1" value="30" data-save>
+      </div>
+
+      <div class="field">
+        <label for="whiteCm">White bar (cm)</label>
+        <input id="whiteCm" type="number" step="0.01" min="0.05" value="1.00" data-save>
+      </div>
+
+      <div class="field">
+        <label for="blackPct">Black gap (% of white)</label>
+        <input id="blackPct" type="number" step="1" min="0" max="500" value="40" data-save>
+      </div>
+
+      <div class="field">
+        <label for="angleDeg">Angle (°)</label>
+        <input id="angleDeg" type="number" step="0.1" min="-180" max="180" value="0" data-save>
+      </div>
+
+      <div class="opts">
+        <label class="opt"><input id="startWhite" type="checkbox" checked data-save>Start with white</label>
+        <label class="opt"><input id="snapInts" type="checkbox" checked data-save>Whole px</label>
+        <label class="opt"><input id="fitView" type="checkbox" checked data-save>Fill viewport</label>
+      </div>
+    </div>
+
+    <div class="btns">
+      <button class="btn secondary" id="fullscreen" title="Fullscreen (F)">Fullscreen</button>
+      <button class="btn secondary" id="print" title="Print (P)">Print</button>
+      <button class="btn primary" id="resetAngle" title="Reset angle (R)">Reset Angle</button>
+    </div>
+
+    <div class="readout" id="readout"></div>
+  </div>
+
+  <script>
+    // ============================================
+    // CONFIGURATION
+    // ============================================
+    const CONFIG = { 
+      maxNodes: 4000, 
+      pruneDelay: 1000, 
+      hoverDistance: 120, 
+      hideDelay: 1400, 
+      storageKey: 'typography-bars-v5-rot' 
+    };
+
+    // ============================================
+    // STATE MANAGEMENT
+    // ============================================
+    const state = { 
+      stripes: [], 
+      cleanupTimer: null, 
+      rafPending: false, 
+      hideToggleTimer: null, 
+      angle: 0, 
+      dragging: false, 
+      animateTimer: null,
+      cachedScreenCm: 30,
+      cachedWhiteCm: 1,
+      cachedBlackPct: 40,
+      cachedAngle: 0
+    };
+
+    // ============================================
+    // UTILITY FUNCTIONS
+    // ============================================
+    const $ = id => document.getElementById(id);
+    const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+    const deg = rad => rad * 57.29577951308232; // 180/π precomputed
+    const rad = deg => deg * 0.017453292519943295; // π/180 precomputed
+    
+    const pxPerCm = () => {
+      const cm = Math.max(1, parseFloat($('screenCm').value || '0'));
+      return window.innerHeight / cm;
+    };
+    
+    const compute = () => {
+      const ppcm = pxPerCm();
+      const whiteCm = Math.max(0.01, parseFloat($('whiteCm').value || '0'));
+      const blackPct = clamp(parseFloat($('blackPct').value || '0'), 0, 500);
+      let whitePx = whiteCm * ppcm;
+      let blackPx = whitePx * (blackPct / 100);
+      if ($('snapInts').checked) { 
+        whitePx = Math.round(whitePx); 
+        blackPx = Math.round(blackPx); 
+      }
+      return { ppcm, whitePx, blackPx };
+    };
+
+    // ============================================
+    // LOCAL STORAGE
+    // ============================================
+    const storage = {
+      save() { 
+        const data = {};
+        document.querySelectorAll('[data-save]').forEach(el => {
+          data[el.id] = el.type === 'checkbox' ? el.checked : el.value;
+        });
+        localStorage.setItem(CONFIG.storageKey, JSON.stringify(data));
+      },
+      load() {
+        try {
+          const data = JSON.parse(localStorage.getItem(CONFIG.storageKey) || '{}');
+          Object.entries(data).forEach(([id, value]) => {
+            const el = $(id);
+            if (!el) return;
+            if (el.type === 'checkbox') el.checked = Boolean(value);
+            else el.value = value;
+          });
+        } catch(err) { 
+          console.warn('Failed to load settings:', err);
+        }
+      }
+    };
+
+    // ============================================
+    // STRIPE POOL MANAGEMENT
+    // ============================================
+    const stripePool = {
+      ensure(need) {
+        const target = Math.min(need, CONFIG.maxNodes);
+        if (state.stripes.length >= target) return;
+        
+        const fragment = document.createDocumentFragment();
+        const toCreate = target - state.stripes.length;
+        
+        for (let i = 0; i < toCreate / 2; i++) {
+          ['white', 'black'].forEach(className => {
+            const div = document.createElement('div');
+            div.className = `stripe ${className}`;
+            div.style.height = '0px';
+            fragment.appendChild(div);
+            state.stripes.push(div);
+          });
+        }
+        
+        $('canvas').appendChild(fragment);
+      },
+      trim(keep) { 
+        while (state.stripes.length > keep) {
+          const node = state.stripes.pop();
+          node?.remove();
+        }
+      },
+      schedulePrune(desiredKeep) { 
+        clearTimeout(state.cleanupTimer);
+        state.cleanupTimer = setTimeout(() => this.trim(desiredKeep), CONFIG.pruneDelay);
+      }
+    };
+
+    // ============================================
+    // RENDERER
+    // ============================================
+    const renderer = {
+      targetStripeHeight(angleDeg, turning) {
+        const radNow = Math.abs(rad(angleDeg % 360));
+        const sinA = Math.abs(Math.sin(radNow));
+        const cosA = Math.abs(Math.cos(radNow));
+        const H = window.innerHeight;
+        const W = window.innerWidth;
+        const diag = Math.hypot(W, H);
+        const needed = (H * cosA) + (W * sinA);
+        const overscan = turning ? diag : 0;
+        const margin = 0.5 * diag + overscan;
+        return needed + margin;
+      },
+      
+      render() {
+        const { ppcm, whitePx, blackPx } = compute();
+        const canvas = $('canvas');
+        const angleNow = parseFloat($('angleDeg').value || '0') || 0;
+        const turning = state.dragging || Math.abs(angleNow) > 0.001;
+        
+        const targetPx = this.targetStripeHeight(angleNow, turning);
+        const cycle = Math.max(1, whitePx + blackPx);
+        const cyclesNeeded = Math.ceil((targetPx + cycle) / cycle);
+        const nodesNeeded = cyclesNeeded * 2 + 4;
+        
+        stripePool.ensure(nodesNeeded);
+        
+        const inverted = !$('startWhite').checked;
+        const sizes = [whitePx, blackPx];
+        const colors = ['white', 'black'];
+        
+        let i = 0, built = 0;
+        
+        while (built < targetPx + cycle && i < state.stripes.length) {
+          const idx = (i + (inverted ? 1 : 0)) % 2;
+          const stripe = state.stripes[i];
+          const newClass = `stripe ${colors[idx]}`;
+          const newHeight = `${sizes[idx]}px`;
+          
+          if (stripe.className !== newClass) stripe.className = newClass;
+          if (stripe.style.height !== newHeight) stripe.style.height = newHeight;
+          
+          built += sizes[idx];
+          i++;
+        }
+        
+        for (; i < state.stripes.length; i++) {
+          if (state.stripes[i].style.height !== '0px') {
+            state.stripes[i].style.height = '0px';
+          }
+        }
+        
+        if (state.angle !== angleNow) {
+          state.angle = angleNow;
+          canvas.style.transform = `rotate(${angleNow}deg)`;
+        }
+        
+        this.updateReadout(ppcm, whitePx, blackPx, angleNow);
+        storage.save();
+        
+        const desiredKeep = Math.min(nodesNeeded + 10, CONFIG.maxNodes);
+        stripePool.schedulePrune(desiredKeep);
+      },
+      
+      updateReadout(ppcm, whitePx, blackPx, angle) {
+        const cmWhite = whitePx / ppcm;
+        const cmBlack = blackPx / ppcm;
+        const html = `
+          <div>vh: <strong>${window.innerHeight}</strong>px</div>
+          <div>px/cm: <strong>${ppcm.toFixed(2)}</strong></div>
+          <div>white: <strong>${whitePx.toFixed(0)}</strong>px (~${cmWhite.toFixed(2)}cm)</div>
+          <div>black: <strong>${blackPx.toFixed(0)}</strong>px (~${cmBlack.toFixed(2)}cm)</div>
+          <div>angle: <strong>${angle.toFixed(1)}</strong>°</div>
+        `;
+        $('readout').innerHTML = html;
+      },
+      
+      requestRender() { 
+        if (state.rafPending) return;
+        state.rafPending = true;
+        requestAnimationFrame(() => {
+          state.rafPending = false;
+          this.render();
+        });
+      }
+    };
+
+    // ============================================
+    // UI CONTROLS
+    // ============================================
+    const ui = {
+      init() { 
+        this.setupInputs();
+        this.setupButtons();
+        this.setupDockToggle();
+        this.setupKeyboard();
+        this.setupProximityReveal();
+        this.setupRotationHandle();
+      },
+      
+      setupInputs() {
+        const c = $('canvas');
+        const animateOnce = (ms = 400) => {
+          c.classList.add('animate');
+          clearTimeout(state.animateTimer);
+          state.animateTimer = setTimeout(() => c.classList.remove('animate'), ms);
+        };
+        
+        const screen = $('screenCm');
+        const white = $('whiteCm');
+        const gap = $('blackPct');
+        const angle = $('angleDeg');
+        
+        [screen, white, gap].forEach(el => {
+          el.addEventListener('input', () => {
+            animateOnce();
+            renderer.requestRender();
+          });
+        });
+        
+        angle.addEventListener('input', () => {
+          c.classList.remove('animate');
+          renderer.requestRender();
+        });
+        
+        document.querySelectorAll('[data-save]').forEach(el => {
+          if ([screen, white, gap, angle].includes(el)) return;
+          el.addEventListener('input', () => renderer.requestRender());
+        });
+        
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(() => renderer.requestRender(), 100);
+        });
+      },
+      
+      setupButtons() {
+        $('fullscreen').addEventListener('click', () => {
+          if (document.fullscreenElement) {
+            document.exitFullscreen?.();
+          } else {
+            document.documentElement.requestFullscreen?.();
+          }
+        });
+        
+        $('print').addEventListener('click', () => window.print());
+        
+        $('resetAngle').addEventListener('click', () => {
+          $('angleDeg').value = 0;
+          renderer.requestRender();
+        });
+      },
+      
+      setupDockToggle() {
+        const toggle = $('toggle');
+        const dock = $('dock');
+        
+        const setHidden = (hidden) => {
+          dock.classList.toggle('hidden', hidden);
+          toggle.textContent = hidden ? 'Show Controls ▼' : 'Hide Controls ▲';
+        };
+        
+        toggle.addEventListener('click', () => {
+          const isHidden = dock.classList.contains('hidden');
+          setHidden(!isHidden);
+        });
+        
+        this._setHidden = setHidden;
+      },
+      
+      setupKeyboard() {
+        window.addEventListener('keydown', (e) => {
+          const k = e.key.toLowerCase();
+          if (k === 'h') {
+            e.preventDefault();
+            const dock = $('dock');
+            this._setHidden?.(!dock.classList.contains('hidden'));
+          }
+          if (k === 'f') { e.preventDefault(); $('fullscreen').click(); }
+          if (k === 'p') { e.preventDefault(); $('print').click(); }
+          if (k === 'r') { e.preventDefault(); $('resetAngle').click(); }
+        });
+      },
+      
+      setupProximityReveal() {
+        const toggle = $('toggle');
+        
+        window.addEventListener('mousemove', (e) => {
+          const fromRight = window.innerWidth - e.clientX;
+          const fromTop = e.clientY;
+          const isNear = fromRight < CONFIG.hoverDistance && fromTop < CONFIG.hoverDistance;
+          const isHovering = e.target === toggle;
+          
+          toggle.classList.toggle('visible', isNear || isHovering);
+          
+          if (!isNear && !isHovering) {
+            clearTimeout(state.hideToggleTimer);
+            state.hideToggleTimer = setTimeout(() => {
+              toggle.classList.remove('visible');
+            }, CONFIG.hideDelay);
+          }
+        });
+      },
+      
+      setupRotationHandle() {
+        const handle = $('rotHandle');
+        const canvas = $('canvas');
+        
+        const onMove = (e) => {
+          if (!state.dragging) return;
+          const x = e.clientX ?? e.touches?.[0]?.clientX;
+          const y = e.clientY ?? e.touches?.[0]?.clientY;
+          if (x == null || y == null) return;
+          
+          const cx = window.innerWidth / 2;
+          const cy = window.innerHeight / 2;
+          const radAngle = Math.atan2(y - cy, x - cx);
+          let degAngle = deg(radAngle) + 90;
+          degAngle = ((degAngle + 180) % 360) - 180;
+          
+          $('angleDeg').value = degAngle.toFixed(1);
+          renderer.requestRender();
+        };
+        
+        const startDrag = (e) => {
+          state.dragging = true;
+          canvas.classList.remove('animate');
+          handle.classList.add('dragging');
+          onMove(e);
+          window.addEventListener('pointermove', onMove);
+          window.addEventListener('pointerup', endDrag);
+        };
+        
+        const endDrag = () => {
+          state.dragging = false;
+          handle.classList.remove('dragging');
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', endDrag);
+        };
+        
+        handle.addEventListener('pointerdown', startDrag);
+      }
+    };
+
+    // ============================================
+    // GOOGLE FONT LOADER
+    // ============================================
+    async function loadFreshFont(timeout = 6000) {
+      try {
+        const link = document.querySelector('link[href*="fonts.googleapis.com"][href*="Stack+Sans+Notch"]');
+        const baseUrl = link?.href || 'https://fonts.googleapis.com/css2?family=Stack+Sans+Notch:wght@200..700&display=swap';
+        const session = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        const cssUrl = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}session=${session}`;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        
+        const res = await fetch(cssUrl, { cache: 'reload', mode: 'cors', signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        let css = await res.text();
+        css = css.replace(/url\((https:[^)]+)\)/g, (m, u) => {
+          const sep = u.includes('?') ? '&' : '?';
+          return `url(${u}${sep}session=${session})`;
+        });
+
+        const style = $('gf-css') || document.createElement('style');
+        style.id = 'gf-css';
+        style.textContent = css;
+        document.head.appendChild(style);
+        link?.remove();
+
+        await Promise.all([
+          document.fonts.load('700 32px "Stack Sans Notch"'),
+          document.fonts.load('400 16px "Stack Sans Notch"'),
+          document.fonts.ready
+        ]);
+
+        document.documentElement.classList.add('use-stack');
+        document.documentElement.style.setProperty('--app-font', '"Stack Sans Notch", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif');
+        
+        const cleanup = () => {
+          $('gf-css')?.remove();
+          document.documentElement.classList.remove('use-stack');
+          document.documentElement.style.removeProperty('--app-font');
+        };
+        
+        window.addEventListener('pagehide', cleanup, { once: true });
+        window.addEventListener('beforeunload', cleanup, { once: true });
+
+        return true;
+      } catch (err) {
+        console.warn('Fresh Google Font load failed; falling back to system fonts.', err);
+        return false;
+      }
+    }
+
+    // ============================================
+    // BOOT SEQUENCE
+    // ============================================
+    function boot() {
+      const splash = $('splash');
+      const msg = $('splashMsg');
+      const loader = splash.querySelector('.loader');
+      const minDelay = (ms) => new Promise(res => setTimeout(res, ms));
+      
+      splash.style.display = 'grid';
+      
+      const DONE_MS = 500;
+      const WELCOME_IN_MS = 500;
+      const WELCOME_STAY_MS = 500;
+      
+      Promise.all([loadFreshFont(), minDelay(1000)])
+        .then(([ok]) => {
+          if (ok) {
+            document.documentElement.classList.add('use-stack');
+            document.documentElement.style.setProperty('--app-font', '"Stack Sans Notch", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif');
+          }
+        })
+        .then(() => {
+          msg.textContent = 'Done.';
+          msg.classList.add('fade-in');
+          loader.classList.add('fade-out');
+          return minDelay(DONE_MS);
+        })
+        .then(() => {
+          loader.remove();
+          msg.classList.remove('fade-in');
+          msg.textContent = 'Welcome.';
+          msg.classList.add('welcome-zoom');
+          return minDelay(WELCOME_IN_MS + WELCOME_STAY_MS);
+        })
+        .then(() => {
+          document.body.classList.remove('app-hidden');
+          init();
+          return fadeSplashBg(splash);
+        })
+        .then(() => {
+          splash.remove();
+        });
+    }
+
+    // ============================================
+    // SPLASH SCREEN FADE
+    // ============================================
+    function fadeSplashBg(splash) {
+      return new Promise((resolve) => {
+        const onEnd = (e) => {
+          if (e.animationName === 'splashBgOut') {
+            splash.removeEventListener('animationend', onEnd);
+            resolve();
+          }
+        };
+        
+        splash.addEventListener('animationend', onEnd);
+        splash.classList.add('bg-out');
+        
+        let ms = 500;
+        try {
+          const cs = getComputedStyle(splash, '::before');
+          const dur = (cs.animationDuration || '0s').split(',')[0].trim();
+          const del = (cs.animationDelay || '0s').split(',')[0].trim();
+          const toMs = v => v.endsWith('ms') ? parseFloat(v) : parseFloat(v) * 1000;
+          ms = toMs(dur) + toMs(del) || 500;
+        } catch(_) {}
+        
+        setTimeout(() => {
+          splash.removeEventListener('animationend', onEnd);
+          resolve();
+        }, ms + 50);
+      });
+    }
+
+    // ============================================
+    // INITIALIZATION
+    // ============================================
+    function init() {
+      storage.load();
+      ui.init();
+      renderer.render();
+    }
+
+    // ============================================
+    // START APPLICATION
+    // ============================================
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', boot);
+    } else {
+      boot();
+    }
+  </script>
+</body>
+</html>
